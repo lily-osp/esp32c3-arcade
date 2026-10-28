@@ -18,6 +18,7 @@ use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 use esp32c3_arcade::{
     breakout::BreakoutGame,
+    falldown::FallDownGame,
     mpu6050::Mpu6050,
     pong::PongGame,
     rng::Rng,
@@ -36,6 +37,7 @@ enum GameId {
     Snake,
     TiltRacer,
     Breakout,
+    FallDown,
 }
 
 #[esp_hal::main]
@@ -68,7 +70,7 @@ fn main() -> ! {
     // Welcome splash
     display.clear(BinaryColor::Off).ok();
     draw_centered(&mut display, "ARCADE", 26, title_style()).ok();
-    draw_centered(&mut display, "5 GAMES STACK", 48, body_style()).ok();
+    draw_centered(&mut display, "6 GAMES STACK", 48, body_style()).ok();
     display.flush().unwrap();
     delay.delay_millis(700);
 
@@ -84,6 +86,7 @@ fn main() -> ! {
     let mut snake = SnakeGame::new();
     let mut racer = TiltRacerGame::new();
     let mut breakout = BreakoutGame::new();
+    let mut falldown = FallDownGame::new();
 
     let mut previous_game: Option<GameId> = None;
     let mut waiting_for_shake = true;
@@ -97,10 +100,11 @@ fn main() -> ! {
             GameId::Snake,
             GameId::TiltRacer,
             GameId::Breakout,
+            GameId::FallDown,
         ];
-        let mut pick = games[rng.gen_range(0, 5) as usize];
+        let mut pick = games[rng.gen_range(0, 6) as usize];
         while Some(pick) == prev {
-            pick = games[rng.gen_range(0, 5) as usize];
+            pick = games[rng.gen_range(0, 6) as usize];
         }
         pick
     };
@@ -119,6 +123,7 @@ fn main() -> ! {
                 GameId::Snake => "SNAKE",
                 GameId::TiltRacer => "TILT RACER",
                 GameId::Breakout => "BREAKOUT",
+                GameId::FallDown => "FALL DOWN",
             };
             draw_centered(&mut display, game_title, 25, title_style()).ok();
             draw_centered(&mut display, "SHAKE TO START", 48, body_style()).ok();
@@ -130,7 +135,7 @@ fn main() -> ! {
             prev_az = az;
 
             let threshold = match current_game {
-                GameId::Snake | GameId::TiltRacer | GameId::Breakout => 5.0,
+                GameId::Snake | GameId::TiltRacer | GameId::Breakout | GameId::FallDown => 5.0,
                 _ => 8.0,
             };
 
@@ -143,14 +148,23 @@ fn main() -> ! {
                     GameId::Snake => snake.reset(&mut rng, now),
                     GameId::TiltRacer => racer.reset(now),
                     GameId::Breakout => breakout.reset_game(&mut rng),
+                    GameId::FallDown => falldown.reset_game(&mut rng, now),
                 }
 
-                // Show difficulty banner for Breakout before countdown
+                // Show difficulty banner for Breakout or FallDown before countdown
                 if current_game == GameId::Breakout {
                     display.clear(BinaryColor::Off).ok();
                     let mut mode_str: String<24> = String::new();
                     write!(mode_str, "MODE: {}", breakout.difficulty_name()).ok();
                     draw_centered(&mut display, "BREAKOUT", 22, title_style()).ok();
+                    draw_centered(&mut display, &mode_str, 45, body_style()).ok();
+                    display.flush().unwrap();
+                    delay.delay_millis(1000);
+                } else if current_game == GameId::FallDown {
+                    display.clear(BinaryColor::Off).ok();
+                    let mut mode_str: String<24> = String::new();
+                    write!(mode_str, "MODE: {}", falldown.difficulty_name()).ok();
+                    draw_centered(&mut display, "FALL DOWN", 22, title_style()).ok();
                     draw_centered(&mut display, &mode_str, 45, body_style()).ok();
                     display.flush().unwrap();
                     delay.delay_millis(1000);
@@ -282,6 +296,24 @@ fn main() -> ! {
                 } else {
                     display.clear(BinaryColor::Off).ok();
                     breakout.draw(&mut display).ok();
+                    display.flush().unwrap();
+                }
+            }
+            GameId::FallDown => {
+                if let Some(status) = falldown.update(&mut rng, ay, now) {
+                    if !status {
+                        display.clear(BinaryColor::Off).ok();
+                        draw_centered(&mut display, "GAME OVER", 25, title_style()).ok();
+                        let mut score_str: String<20> = String::new();
+                        write!(score_str, "SCORE {}", falldown.score).ok();
+                        draw_centered(&mut display, &score_str, 48, body_style()).ok();
+                        display.flush().unwrap();
+                        delay.delay_millis(1500);
+                        round_over = true;
+                    }
+                } else {
+                    display.clear(BinaryColor::Off).ok();
+                    falldown.draw(&mut display, now).ok();
                     display.flush().unwrap();
                 }
             }
