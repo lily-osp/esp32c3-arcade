@@ -1,32 +1,32 @@
 # ESP32-C3 Retro Arcade Game Stack
 
-A high-performance embedded retro game suite designed for the **ESP32-C3 SuperMini**, **SSD1306 OLED (128x64)**, and **MPU6050 6-Axis IMU**.
+Six tilt-controlled arcade games for the ESP32-C3 SuperMini, using a 128x64 SSD1306 I2C OLED display and an MPU-6050 accelerometer/gyroscope.
 
-This repository contains both:
-1. **Pure `no_std` Rust Implementations (`rust/`)**: Highly optimized bare-metal RISC-V firmware built with `esp-hal` v1.2.2 and `embedded-graphics` v0.8.1 in a reproducible Nix flake environment.
-2. **Original Arduino C++ Implementations**: Battle-tested reference sketches for Arduino IDE / `arduino-cli`.
+The repository includes two implementations:
+1. **Rust (`rust/`)**: Bare-metal `#![no_std]` firmware using `esp-hal` 1.2.2 and `embedded-graphics` 0.8.1, reproducible via a Nix flake.
+2. **Arduino C++**: Standalone sketches for each game plus a unified multi-game launcher, compatible with the Arduino IDE and `arduino-cli`.
 
 ---
 
-## 🕹️ The Games
+## Games
 
 | Game | Controls | Description |
 |---|---|---|
-| **Shooter** | Tilt vertical (MPU X) | Horizontal space shooter with auto-fire, triple/double shot power-ups, fire-rate scaling, enemy waves, and a multi-phase boss with an HP bar. |
-| **Pong** | Tilt vertical (MPU X) | Classic single-player Pong vs. adaptive AI with 4 difficulty levels (Easy, Medium, Hard, Extreme) and dynamic ball spin. |
-| **Snake** | Tilt 4-way (MPU X/Y) | Direction-steered snake with border wrapping, food spawning, progressive speed ramp, and self-collision detection. |
-| **Tilt Racer** | Tilt horizontal (MPU Y) | 3-lane vertical highway racer with momentum steering, scrolling road markers, oncoming traffic obstacles, and invincibility frames. |
-| **Breakout** | Tilt horizontal (MPU Y) | Brick breaker with 32 multi-hit bricks, dynamic ball angle deflection, dropping power-ups (wide paddle, slow ball, extra life), and 4-tier randomized difficulty. |
-| **Fall Down** | Tilt horizontal (MPU Y) | Fast-paced vertical descent rolling a marble through gaps in ascending floors, featuring physics momentum, collectible gems, hazard ceiling spikes, and 4-tier randomized difficulty. |
-| **Random Arcade** | Shake to start | Unified multi-game arcade launcher that seamlessly rotates across all 6 games without repeating the previous game. |
+| **Shooter** | Tilt vertical (MPU X) | Horizontal space shooter with auto-fire, double/triple shot power-ups, fire-rate bonuses, escalating enemy waves, and a multi-phase boss with an HP bar. |
+| **Pong** | Tilt vertical (MPU X) | Single-player Pong against an adaptive AI paddle with dynamic deflection angles and 4 difficulty tiers. |
+| **Snake** | Tilt 4-way (MPU X/Y) | Grid-based snake with edge wrapping, food spawning, progressive speed ramp, and self-collision checks. |
+| **Tilt Racer** | Tilt horizontal (MPU Y) | 3-lane vertical survival racer with momentum-based steering, scrolling road lines, randomized traffic patterns, and invincibility respawns. |
+| **Breakout** | Tilt horizontal (MPU Y) | Brick breaker with 32 multi-hit bricks, dynamic ball deflection, dropping power-ups (wide paddle, slow ball, extra life), and 4 difficulty tiers. |
+| **Fall Down** | Tilt horizontal (MPU Y) | Vertical descent rolling a ball through gaps in rising floors, featuring gravity physics, collectible gems, hazard ceiling spikes, and 4 difficulty tiers. |
+| **Random Arcade** | Shake to start | Unified multi-game launcher that cycles through all six games without repeating the previous game. |
 
 ---
 
-## ⚡ Hardware Pinout
+## Hardware and pinout
 
-Both the SSD1306 OLED and MPU6050 IMU share a single fast I2C bus on GPIO9 (SDA) and GPIO8 (SCL):
+The SSD1306 OLED and MPU-6050 share the default hardware I2C bus on GPIO9 (SDA) and GPIO8 (SCL) at 400 kHz:
 
-| Peripheral | Pin | ESP32-C3 SuperMini | Bus Address |
+| Peripheral | Pin | ESP32-C3 SuperMini | I2C Address |
 |---|---|---|---|
 | **SSD1306 OLED (128x64)** | VCC | 3.3V | — |
 | | GND | GND | — |
@@ -39,35 +39,38 @@ Both the SSD1306 OLED and MPU6050 IMU share a single fast I2C bus on GPIO9 (SDA)
 
 ---
 
-## 🦀 Rust Embedded Stack (`rust/`)
+## Rust implementation (`rust/`)
 
-### Key Architecture Features
-- **Pure `no_std` & Zero Dynamic Allocations**: No heap allocator needed; deterministic frame pacing (~50 FPS) with static buffers.
-- **Shared I2C Bus Arbitration**: `embedded-hal-bus::i2c::RefCellDevice` multiplexing display communication with sensor reading on I2C0.
-- **Fast PRNG**: In-crate `Xorshift32` pseudo-random number generator seeded from accelerometer thermal noise and chip startup timer.
-- **Footprint**:
-  - Standalone binaries: ~115–124 KB (less than 3% of 4MB flash).
-  - All-in-one Random Arcade (all 4 games combined): **133 KB** (only 3.2% of flash).
+### Architecture
+- **`#![no_std]` environment**: Zero dynamic heap allocations; all game state, entity buffers, and graphics targets use static memory.
+- **I2C bus sharing**: Uses `embedded-hal-bus::i2c::RefCellDevice` to multiplex display rendering and accelerometer polling over I2C0.
+- **PRNG**: In-crate XorShift32 seeded from accelerometer analog noise and startup timer ticks.
+- **Flash footprint**:
+  - Standalone binaries: ~115–125 KB each.
+  - Multi-game launcher (`arcade`): 162 KB, occupying 3.92% of the 4 MB flash partition.
 
-### Quickstart with Nix
+### Development environment
+
+A Nix flake provides the pinned toolchain, RISC-V cross-compiler target, and flashing tools:
+
 ```sh
 cd rust
 nix develop
 ```
 
-### Build & Flash
+### Build and flash
 
-Build all release binaries:
+Build release binaries:
 ```sh
 cargo build --release
 ```
 
-Flash a specific target directly to `/dev/ttyACM0`:
+Flash directly to `/dev/ttyACM0`:
 ```sh
-# Flash all-in-one multi-game arcade
+# Multi-game launcher
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/arcade
 
-# Or flash standalone games
+# Standalone game binaries
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/shooter
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/pong
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/snake
@@ -78,9 +81,9 @@ espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/fa
 
 ---
 
-## 🛠️ Arduino C++ Reference
+## Arduino C++ reference
 
-Each game is also available in its standalone `.ino` sketch directory:
+Each game is also provided as a standalone Arduino sketch:
 - `shooter/shooter.ino`
 - `pong/pong.ino`
 - `snake/snake.ino`
@@ -89,7 +92,7 @@ Each game is also available in its standalone `.ino` sketch directory:
 - `falldown/falldown.ino`
 - `random-arcade/random-arcade.ino`
 
-Compile with `arduino-cli`:
+Compile and flash with `arduino-cli`:
 ```sh
 arduino-cli compile --fqbn esp32:esp32:esp32c3 random-arcade
 arduino-cli upload --fqbn esp32:esp32:esp32c3 -p /dev/ttyACM0 random-arcade
@@ -97,6 +100,6 @@ arduino-cli upload --fqbn esp32:esp32:esp32c3 -p /dev/ttyACM0 random-arcade
 
 ---
 
-## 📜 License
+## License
 
-MIT License. Designed and maintained under the [Lily-OSP](https://github.com/lily-osp) organization.
+MIT License. Maintained under the [Lily-OSP](https://github.com/lily-osp) organization.

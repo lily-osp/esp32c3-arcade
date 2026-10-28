@@ -1,13 +1,15 @@
 # Random Arcade
 
-A unified random game launcher for the ESP32-C3, SSD1306 OLED, and MPU6050. It embeds and runs the actual production sketches from the four game folders, rather than reduced reimplementations:
+A multi-game arcade launcher for the ESP32-C3, SSD1306 OLED, and MPU-6050. It embeds and runs the actual production sketches from the six individual game folders in separate namespaces:
 
 - `../pong/pong.ino`
 - `../snake/snake.ino`
 - `../shooter/shooter.ino`
 - `../tilt-racer/tilt-racer.ino`
+- `../breakout/breakout.ino`
+- `../falldown/falldown.ino`
 
-Each round randomly selects one game. A new game is selected after each round without immediately repeating the previous game.
+Each round selects a random game without repeating the game played in the previous round.
 
 ## Hardware and pinout
 
@@ -17,28 +19,30 @@ Each round randomly selects one game. A new game is selected after each round wi
 | SSD1306 OLED | GND | GND |
 | SSD1306 OLED | SDA | GPIO9 |
 | SSD1306 OLED | SCL | GPIO8 |
-| MPU6050 | VCC | 3.3V |
-| MPU6050 | GND | GND |
-| MPU6050 | SDA | GPIO9 |
-| MPU6050 | SCL | GPIO8 |
+| MPU-6050 | VCC | 3.3V |
+| MPU-6050 | GND | GND |
+| MPU-6050 | SDA | GPIO9 |
+| MPU-6050 | SCL | GPIO8 |
 
-The OLED uses I2C address `0x3C`; the MPU6050 uses `0x68`. Both share the GPIO9/GPIO8 I2C bus.
+The OLED uses I2C address `0x3C`; the MPU-6050 uses `0x68`. Both share the GPIO9/GPIO8 I2C bus.
 
 ## How it works
 
 1. The launcher chooses a random game.
-2. It runs that game's real `setup()` and `loop()` inside a separate namespace.
-3. The selected sketch keeps its own mechanics, progression, HUD, difficulty, power-ups, and game-over behavior.
-4. When that sketch returns to its shake-to-start state after a completed round, the launcher selects another game.
-5. The next game is never the same as the previous one.
+2. It executes that game's `setup()` and `loop()` within an isolated namespace.
+3. The selected game retains its mechanics, difficulty roll, power-ups, and game-over state.
+4. When the sketch returns to its shake-to-start screen following a round, the launcher selects another game.
+5. The next game is guaranteed to differ from the previous one.
 
 ## Controls
 
-- Pong: tilt vertically using MPU X; first player to 10 points wins.
-- Snake: tilt using MPU X/Y; the snake wraps around the edges.
-- Shooter: tilt vertically using MPU X; the ship fires automatically.
-- Tilt Racer: tilt horizontally using MPU Y; avoid traffic as the road accelerates.
-- Shake after a round ends to start the newly selected game.
+- Pong: Tilt vertically using MPU X.
+- Snake: Tilt 4-way using MPU X/Y.
+- Shooter: Tilt vertically using MPU X.
+- Tilt Racer: Tilt horizontally using MPU Y.
+- Breakout: Tilt horizontally using MPU Y.
+- Fall Down: Tilt horizontally using MPU Y.
+- Shake the board to begin each selected game.
 
 ## Build and upload
 
