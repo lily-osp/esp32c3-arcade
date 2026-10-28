@@ -18,13 +18,11 @@ pub const W: i32 = 128;
 pub const H: i32 = 64;
 pub const PADDLE_Y: i32 = 58;
 pub const PADDLE_H: i32 = 4;
-pub const BASE_PADDLE_W: i32 = 18;
 pub const BALL_SIZE: i32 = 3;
 pub const BRICK_ROWS: usize = 4;
 pub const BRICK_COLS: usize = 8;
 pub const BRICK_W: i32 = 13;
 pub const BRICK_H: i32 = 4;
-pub const START_LIVES: i8 = 3;
 
 #[derive(Clone, Copy, Default)]
 pub struct Brick {
@@ -43,6 +41,7 @@ pub struct Powerup {
 pub struct BreakoutGame {
     pub paddle_x: f32,
     pub paddle_w: i32,
+    pub base_paddle_w: i32,
     pub ball_x: f32,
     pub ball_y: f32,
     pub ball_vx: f32,
@@ -50,6 +49,10 @@ pub struct BreakoutGame {
     pub score: i32,
     pub lives: i8,
     pub level: u8,
+    pub difficulty: u8, // 0 = Easy, 1 = Medium, 2 = Hard, 3 = Extreme
+    pub powerup_chance: u32,
+    pub base_speed: f32,
+    pub max_speed: f32,
     pub bricks: [[Brick; BRICK_COLS]; BRICK_ROWS],
     pub powerups: [Powerup; 3],
     pub wide_paddle_until_ms: u64,
@@ -59,15 +62,20 @@ pub struct BreakoutGame {
 impl BreakoutGame {
     pub fn new() -> Self {
         Self {
-            paddle_x: (W / 2 - BASE_PADDLE_W / 2) as f32,
-            paddle_w: BASE_PADDLE_W,
-            ball_x: (W / 2) as f32,
-            ball_y: (PADDLE_Y - BALL_SIZE - 1) as f32,
-            ball_vx: 1.5,
-            ball_vy: -1.8,
+            paddle_x: 51.0,
+            paddle_w: 26,
+            base_paddle_w: 26,
+            ball_x: 64.0,
+            ball_y: 53.0,
+            ball_vx: 1.1,
+            ball_vy: -1.3,
             score: 0,
-            lives: START_LIVES,
+            lives: 5,
             level: 1,
+            difficulty: 0,
+            powerup_chance: 35,
+            base_speed: 1.1,
+            max_speed: 2.8,
             bricks: [[Brick::default(); BRICK_COLS]; BRICK_ROWS],
             powerups: [Powerup::default(); 3],
             wide_paddle_until_ms: 0,
@@ -75,44 +83,89 @@ impl BreakoutGame {
         }
     }
 
+    pub fn difficulty_name(&self) -> &'static str {
+        match self.difficulty {
+            0 => "EASY",
+            1 => "MEDIUM",
+            2 => "HARD",
+            _ => "EXTREME",
+        }
+    }
+
+    pub fn reset_game(&mut self, rng: &mut Rng) {
+        self.score = 0;
+        self.level = 1;
+        self.wide_paddle_until_ms = 0;
+        for p in &mut self.powerups {
+            p.active = false;
+        }
+
+        // Weighted random difficulty: Easy 40%, Medium 30%, Hard 20%, Extreme 10%
+        let roll = rng.gen_range(0, 10);
+        if roll < 4 {
+            self.difficulty = 0; // Easy
+            self.base_paddle_w = 26;
+            self.powerup_chance = 35;
+            self.lives = 5;
+            self.base_speed = 1.1;
+            self.max_speed = 2.8;
+        } else if roll < 7 {
+            self.difficulty = 1; // Medium
+            self.base_paddle_w = 22;
+            self.powerup_chance = 25;
+            self.lives = 4;
+            self.base_speed = 1.4;
+            self.max_speed = 3.4;
+        } else if roll < 9 {
+            self.difficulty = 2; // Hard
+            self.base_paddle_w = 18;
+            self.powerup_chance = 18;
+            self.lives = 3;
+            self.base_speed = 1.7;
+            self.max_speed = 4.0;
+        } else {
+            self.difficulty = 3; // Extreme
+            self.base_paddle_w = 15;
+            self.powerup_chance = 10;
+            self.lives = 2;
+            self.base_speed = 2.0;
+            self.max_speed = 4.6;
+        }
+
+        self.paddle_w = self.base_paddle_w;
+        self.paddle_x = ((W - self.paddle_w) / 2) as f32;
+        self.reset_level(rng);
+    }
+
     pub fn reset_level(&mut self, rng: &mut Rng) {
         for row in 0..BRICK_ROWS {
-            let hp = match row {
-                0 => 2, // Top row: reinforced 2-hit bricks
-                _ => 1, // Standard 1-hit bricks
+            let hp = match self.difficulty {
+                0 => 1, // Easy: all 1-hit bricks
+                1 => if row == 0 { 2 } else { 1 }, // Medium: top row 2 hits
+                2 => if row <= 1 { 2 } else { 1 }, // Hard: top 2 rows 2 hits
+                _ => if row == 0 { 3 } else if row == 1 { 2 } else { 1 }, // Extreme: 3 & 2 hits
             };
             for col in 0..BRICK_COLS {
-                let has_powerup = rng.gen_percent(20);
+                let has_powerup = rng.gen_percent(self.powerup_chance);
                 self.bricks[row][col] = Brick { hp, has_powerup };
             }
         }
         self.reset_ball();
     }
 
-    pub fn reset_game(&mut self, rng: &mut Rng) {
-        self.score = 0;
-        self.lives = START_LIVES;
-        self.level = 1;
-        self.wide_paddle_until_ms = 0;
-        self.paddle_w = BASE_PADDLE_W;
-        for p in &mut self.powerups {
-            p.active = false;
-        }
-        self.reset_level(rng);
-    }
-
     pub fn reset_ball(&mut self) {
         self.ball_stuck = true;
         self.ball_x = self.paddle_x + (self.paddle_w as f32 / 2.0);
         self.ball_y = (PADDLE_Y - BALL_SIZE - 1) as f32;
-        let speed_mult = 1.0 + (self.level as f32 * 0.15);
-        self.ball_vx = 1.5 * speed_mult;
-        self.ball_vy = -1.8 * speed_mult;
+        let speed_mult = 1.0 + ((self.level - 1) as f32 * 0.10);
+        let speed = (self.base_speed * speed_mult).min(self.max_speed);
+        self.ball_vx = speed * 0.75;
+        self.ball_vy = -speed;
     }
 
     pub fn update_paddle(&mut self, ay: f32) {
-        // MPU Y acceleration steers paddle horizontally
-        self.paddle_x += ay * 0.95;
+        // High responsive tilt steering
+        self.paddle_x += ay * 1.15;
         let max_x = (W - self.paddle_w) as f32;
         self.paddle_x = self.paddle_x.clamp(0.0, max_x);
 
@@ -146,20 +199,21 @@ impl BreakoutGame {
         count
     }
 
-    // Returns: Some(true) if cleared/win, Some(false) if game over, None if ongoing
+    // Returns: Some(false) if game over, None if ongoing
     pub fn update(&mut self, rng: &mut Rng, ay: f32, now_ms: u64) -> Option<bool> {
         self.update_paddle(ay);
 
         // Power-up expiration
         if now_ms >= self.wide_paddle_until_ms {
-            self.paddle_w = BASE_PADDLE_W;
+            self.paddle_w = self.base_paddle_w;
         }
 
-        // Launch ball if stuck and player tilts or after 1 sec
+        // Release ball if stuck when tilted
         if self.ball_stuck {
-            if ay.abs() > 2.0 {
+            if ay.abs() > 1.8 {
                 self.ball_stuck = false;
-                self.ball_vx = if ay > 0.0 { 1.6 } else { -1.6 };
+                let sign = if ay > 0.0 { 1.0 } else { -1.0 };
+                self.ball_vx = sign * (self.base_speed * 0.85);
             }
             return None;
         }
@@ -192,15 +246,15 @@ impl BreakoutGame {
         {
             self.ball_y = (PADDLE_Y - BALL_SIZE) as f32;
             let paddle_center = self.paddle_x + (self.paddle_w as f32 / 2.0);
-            let hit_offset = (self.ball_x + BALL_SIZE as f32 / 2.0 - paddle_center)
+            let hit_offset = (self.ball_x + (BALL_SIZE as f32 / 2.0) - paddle_center)
                 / (self.paddle_w as f32 / 2.0);
 
             let speed = (self.ball_vx * self.ball_vx + self.ball_vy * self.ball_vy).sqrt();
-            let new_speed = (speed * 1.02).clamp(2.0, 4.5);
+            let new_speed = (speed * 1.01).clamp(self.base_speed, self.max_speed);
 
             self.ball_vx = hit_offset * (new_speed * 0.85);
             self.ball_vy = -((new_speed * new_speed - self.ball_vx * self.ball_vx)
-                .max(1.0)
+                .max(0.8)
                 .sqrt());
         }
 
@@ -225,7 +279,7 @@ impl BreakoutGame {
 
                     if self.bricks[row][col].hp == 0 && self.bricks[row][col].has_powerup {
                         self.spawn_powerup(
-                            brick_x as f32 + BRICK_W as f32 / 2.0,
+                            brick_x as f32 + (BRICK_W as f32 / 2.0),
                             brick_y as f32 + BRICK_H as f32,
                             rng,
                         );
@@ -240,29 +294,29 @@ impl BreakoutGame {
             if !p.active {
                 continue;
             }
-            p.y += 1.0;
+            p.y += 0.9;
 
             // Catch powerup
             if p.y >= PADDLE_Y as f32
                 && p.y <= (PADDLE_Y + PADDLE_H + 4) as f32
                 && p.x >= self.paddle_x - 2.0
-                && p.x <= self.paddle_x + self.paddle_w as f32 + 2.0
+                && p.x <= self.paddle_x + (self.paddle_w as f32) + 2.0
             {
                 p.active = false;
                 match p.kind {
                     0 => {
                         // Wide paddle
-                        self.paddle_w = BASE_PADDLE_W + 8;
+                        self.paddle_w = self.base_paddle_w + 10;
                         self.wide_paddle_until_ms = now_ms + 8000;
                     }
                     1 => {
                         // Slow ball
-                        self.ball_vx *= 0.75;
-                        self.ball_vy *= 0.75;
+                        self.ball_vx *= 0.70;
+                        self.ball_vy *= 0.70;
                     }
                     _ => {
                         // Life +1
-                        if self.lives < 5 {
+                        if self.lives < 6 {
                             self.lives += 1;
                         }
                     }
@@ -301,7 +355,7 @@ impl BreakoutGame {
                     continue;
                 }
                 let bx = 4 + (col as i32 * (BRICK_W + 2));
-                if brick.hp == 2 {
+                if brick.hp >= 2 {
                     // Reinforced brick: filled with inner border
                     Rectangle::new(Point::new(bx, by), Size::new(BRICK_W as u32, BRICK_H as u32))
                         .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
@@ -333,7 +387,7 @@ impl BreakoutGame {
         .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
         .draw(target)?;
 
-        // Powerups (dropping diamonds/capsules)
+        // Powerups (dropping capsule shapes)
         for p in &self.powerups {
             if !p.active {
                 continue;
@@ -346,9 +400,15 @@ impl BreakoutGame {
             Pixel(Point::new(px, py), BinaryColor::Off).draw(target)?;
         }
 
-        // HUD: Score and Lives
+        // HUD: Score, Lives, Difficulty Tag
         let mut hud_str: String<24> = String::new();
-        write!(hud_str, "S:{} L:{} LV:{}", self.score, self.lives, self.level).ok();
+        let diff_tag = match self.difficulty {
+            0 => "EZ",
+            1 => "MD",
+            2 => "HD",
+            _ => "XT",
+        };
+        write!(hud_str, "S:{} L:{} {}", self.score, self.lives, diff_tag).ok();
         let hud_style = MonoTextStyleBuilder::new()
             .font(&FONT_6X10)
             .text_color(BinaryColor::On)

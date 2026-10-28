@@ -145,6 +145,17 @@ fn main() -> ! {
                     GameId::Breakout => breakout.reset_game(&mut rng),
                 }
 
+                // Show difficulty banner for Breakout before countdown
+                if current_game == GameId::Breakout {
+                    display.clear(BinaryColor::Off).ok();
+                    let mut mode_str: String<24> = String::new();
+                    write!(mode_str, "MODE: {}", breakout.difficulty_name()).ok();
+                    draw_centered(&mut display, "BREAKOUT", 22, title_style()).ok();
+                    draw_centered(&mut display, &mode_str, 45, body_style()).ok();
+                    display.flush().unwrap();
+                    delay.delay_millis(1000);
+                }
+
                 // 3..2..1 Countdown (except Snake starts directly)
                 if current_game != GameId::Snake {
                     for num in (1..=3).rev() {

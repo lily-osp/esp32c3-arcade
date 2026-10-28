@@ -90,6 +90,15 @@ fn main() -> ! {
                 waiting_for_shake = false;
                 game.reset_game(&mut rng);
 
+                // Show difficulty mode banner
+                display.clear(BinaryColor::Off).ok();
+                let mut mode_str: String<24> = String::new();
+                write!(mode_str, "MODE: {}", game.difficulty_name()).ok();
+                draw_centered(&mut display, "BREAKOUT", 22, title_style()).ok();
+                draw_centered(&mut display, &mode_str, 45, body_style()).ok();
+                display.flush().unwrap();
+                delay.delay_millis(1000);
+
                 for num in (1..=3).rev() {
                     display.clear(BinaryColor::Off).ok();
                     let mut text: String<4> = String::new();

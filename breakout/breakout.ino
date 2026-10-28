@@ -9,13 +9,11 @@
 #define H 64
 #define PADDLE_Y 58
 #define PADDLE_H 4
-#define BASE_PADDLE_W 18
 #define BALL_SIZE 3
 #define BRICK_ROWS 4
 #define BRICK_COLS 8
 #define BRICK_W 13
 #define BRICK_H 4
-#define START_LIVES 3
 #define SHAKE_THRESHOLD 6.0
 
 Adafruit_SSD1306 d(W, H, &Wire, -1);
@@ -34,17 +32,40 @@ struct Powerup {
 
 Brick bricks[BRICK_ROWS][BRICK_COLS];
 Powerup powerups[3];
-float paddleX = (W - BASE_PADDLE_W) / 2.0;
-int paddleW = BASE_PADDLE_W;
+int basePaddleW = 26;
+int paddleW = 26;
+float paddleX = (W - 26) / 2.0;
 float ballX = W / 2.0;
 float ballY = PADDLE_Y - BALL_SIZE - 1;
-float ballVX = 1.5;
-float ballVY = -1.8;
+float ballVX = 1.1;
+float ballVY = -1.3;
 int score = 0;
-int lives = START_LIVES;
+int lives = 5;
 int level = 1;
+uint8_t difficulty = 0; // 0: Easy, 1: Medium, 2: Hard, 3: Extreme
+int powerupChance = 35;
+float baseSpeed = 1.1;
+float maxSpeed = 2.8;
 unsigned long widePaddleUntil = 0;
 bool ballStuck = true;
+
+const char* getDifficultyName() {
+  switch (difficulty) {
+    case 0: return "EASY";
+    case 1: return "MEDIUM";
+    case 2: return "HARD";
+    default: return "EXTREME";
+  }
+}
+
+const char* getDifficultyTag() {
+  switch (difficulty) {
+    case 0: return "EZ";
+    case 1: return "MD";
+    case 2: return "HD";
+    default: return "XT";
+  }
+}
 
 unsigned long lastFrame = 0;
 unsigned long shakeReadyAt = 0;
@@ -66,17 +87,24 @@ void resetBall() {
   ballStuck = true;
   ballX = paddleX + paddleW / 2.0;
   ballY = PADDLE_Y - BALL_SIZE - 1;
-  float mult = 1.0 + (level * 0.15);
-  ballVX = 1.5 * mult;
-  ballVY = -1.8 * mult;
+  float speedMult = 1.0 + ((level - 1) * 0.10);
+  float speed = min(baseSpeed * speedMult, maxSpeed);
+  ballVX = speed * 0.75;
+  ballVY = -speed;
 }
 
 void resetLevel() {
   for (int r = 0; r < BRICK_ROWS; r++) {
-    uint8_t hp = (r == 0) ? 2 : 1;
+    uint8_t hp = 1;
+    if (difficulty == 1 && r == 0) hp = 2;
+    else if (difficulty == 2 && r <= 1) hp = 2;
+    else if (difficulty == 3) {
+      if (r == 0) hp = 3;
+      else if (r == 1) hp = 2;
+    }
     for (int c = 0; c < BRICK_COLS; c++) {
       bricks[r][c].hp = hp;
-      bricks[r][c].hasPowerup = (random(100) < 20);
+      bricks[r][c].hasPowerup = (random(100) < powerupChance);
     }
   }
   resetBall();
@@ -84,11 +112,44 @@ void resetLevel() {
 
 void resetGame() {
   score = 0;
-  lives = START_LIVES;
   level = 1;
-  paddleW = BASE_PADDLE_W;
   widePaddleUntil = 0;
   for (int i = 0; i < 3; i++) powerups[i].active = false;
+
+  // 4-Tier Weighted Difficulty: Easy 40%, Medium 30%, Hard 20%, Extreme 10%
+  int roll = random(10);
+  if (roll < 4) {
+    difficulty = 0; // Easy
+    basePaddleW = 26;
+    powerupChance = 35;
+    lives = 5;
+    baseSpeed = 1.1;
+    maxSpeed = 2.8;
+  } else if (roll < 7) {
+    difficulty = 1; // Medium
+    basePaddleW = 22;
+    powerupChance = 25;
+    lives = 4;
+    baseSpeed = 1.4;
+    maxSpeed = 3.4;
+  } else if (roll < 9) {
+    difficulty = 2; // Hard
+    basePaddleW = 18;
+    powerupChance = 18;
+    lives = 3;
+    baseSpeed = 1.7;
+    maxSpeed = 4.0;
+  } else {
+    difficulty = 3; // Extreme
+    basePaddleW = 15;
+    powerupChance = 10;
+    lives = 2;
+    baseSpeed = 2.0;
+    maxSpeed = 4.6;
+  }
+
+  paddleW = basePaddleW;
+  paddleX = (W - paddleW) / 2.0;
   resetLevel();
 }
 
@@ -101,6 +162,16 @@ void showStartScreen() {
 }
 
 void showCountdown() {
+  // Show Difficulty banner
+  d.clearDisplay();
+  d.setTextColor(SSD1306_WHITE);
+  drawCentered("BREAKOUT", 2, 10);
+  char modeStr[20];
+  snprintf(modeStr, sizeof(modeStr), "MODE: %s", getDifficultyName());
+  drawCentered(modeStr, 1, 43);
+  d.display();
+  delay(1000);
+
   for (int number = 3; number >= 1; number--) {
     d.clearDisplay();
     d.setTextColor(SSD1306_WHITE);
@@ -160,7 +231,7 @@ int countActiveBricks() {
 }
 
 void updatePaddle(float ay) {
-  paddleX += ay * 0.95;
+  paddleX += ay * 1.15;
   paddleX = constrain(paddleX, 0, W - paddleW);
   if (ballStuck) {
     ballX = paddleX + paddleW / 2.0;
@@ -177,7 +248,7 @@ void drawGame() {
     for (int c = 0; c < BRICK_COLS; c++) {
       if (bricks[r][c].hp == 0) continue;
       int bx = 4 + c * (BRICK_W + 2);
-      if (bricks[r][c].hp == 2) {
+      if (bricks[r][c].hp >= 2) {
         d.fillRect(bx, by, BRICK_W, BRICK_H, 1);
         d.drawPixel(bx + 1, by + 1, 0);
         d.drawPixel(bx + BRICK_W - 2, by + 1, 0);
@@ -201,7 +272,7 @@ void drawGame() {
 
   // HUD
   char hud[28];
-  snprintf(hud, sizeof(hud), "S:%d L:%d LV:%d", score, lives, level);
+  snprintf(hud, sizeof(hud), "S:%d L:%d %s", score, lives, getDifficultyTag());
   d.setTextSize(1);
   d.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
   d.setCursor(1, 0);
@@ -269,7 +340,7 @@ void loop() {
   updatePaddle(a.acceleration.y);
 
   if (millis() >= widePaddleUntil) {
-    paddleW = BASE_PADDLE_W;
+    paddleW = basePaddleW;
   }
 
   if (ballStuck) {
@@ -298,7 +369,7 @@ void loop() {
     float center = paddleX + paddleW / 2.0;
     float offset = (ballX + BALL_SIZE / 2.0 - center) / (paddleW / 2.0);
     float speed = sqrt(ballVX * ballVX + ballVY * ballVY);
-    speed = constrain(speed * 1.02, 2.0, 4.5);
+    speed = constrain(speed * 1.02, baseSpeed, maxSpeed);
     ballVX = offset * (speed * 0.85);
     ballVY = -sqrt(max(1.0f, speed * speed - ballVX * ballVX));
   }
@@ -331,7 +402,7 @@ void loop() {
         powerups[i].x >= paddleX - 2 && powerups[i].x <= paddleX + paddleW + 2) {
       powerups[i].active = false;
       if (powerups[i].kind == 0) {
-        paddleW = BASE_PADDLE_W + 8;
+        paddleW = basePaddleW + 8;
         widePaddleUntil = millis() + 8000;
       } else if (powerups[i].kind == 1) {
         ballVX *= 0.75;
