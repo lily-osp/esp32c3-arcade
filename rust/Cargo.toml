@@ -1,0 +1,57 @@
+[package]
+name = "esp32c3-arcade"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "esp32c3_arcade"
+path = "src/lib.rs"
+
+[[bin]]
+name = "arcade"
+path = "src/bin/arcade.rs"
+
+[[bin]]
+name = "shooter"
+path = "src/bin/shooter.rs"
+
+[[bin]]
+name = "pong"
+path = "src/bin/pong.rs"
+
+[[bin]]
+name = "snake"
+path = "src/bin/snake.rs"
+
+[[bin]]
+name = "tilt-racer"
+path = "src/bin/tilt_racer.rs"
+
+[dependencies]
+esp-backtrace = { version = "0.20.0", features = [
+    "esp32c3",
+    "panic-handler",
+    "println",
+] }
+esp-println = { version = "0.18.0", default-features = false, features = ["esp32c3", "jtag-serial"] }
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32c3"] }
+esp-hal = { version = "1.2.2", features = ["esp32c3", "unstable"] }
+embedded-graphics = "0.8.1"
+ssd1306 = "0.9.0"
+embedded-hal-bus = "0.3.0"
+embedded-hal = "1.0.0"
+fugit = "0.5.0"
+heapless = "0.8"
+micromath = "2.1"
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = "fat"
+opt-level = "s"
+overflow-checks = false
