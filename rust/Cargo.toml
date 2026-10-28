@@ -27,6 +27,10 @@ path = "src/bin/snake.rs"
 name = "tilt-racer"
 path = "src/bin/tilt_racer.rs"
 
+[[bin]]
+name = "breakout"
+path = "src/bin/breakout.rs"
+
 [dependencies]
 esp-backtrace = { version = "0.20.0", features = [
     "esp32c3",

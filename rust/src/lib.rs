@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod breakout;
 pub mod mpu6050;
 pub mod pong;
 pub mod rng;

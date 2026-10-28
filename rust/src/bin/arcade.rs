@@ -17,6 +17,7 @@ use heapless::String;
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 use esp32c3_arcade::{
+    breakout::BreakoutGame,
     mpu6050::Mpu6050,
     pong::PongGame,
     rng::Rng,
@@ -34,6 +35,7 @@ enum GameId {
     Pong,
     Snake,
     TiltRacer,
+    Breakout,
 }
 
 #[esp_hal::main]
@@ -66,7 +68,7 @@ fn main() -> ! {
     // Welcome splash
     display.clear(BinaryColor::Off).ok();
     draw_centered(&mut display, "ARCADE", 26, title_style()).ok();
-    draw_centered(&mut display, "4 GAMES STACK", 48, body_style()).ok();
+    draw_centered(&mut display, "5 GAMES STACK", 48, body_style()).ok();
     display.flush().unwrap();
     delay.delay_millis(700);
 
@@ -81,6 +83,7 @@ fn main() -> ! {
     let mut pong = PongGame::new();
     let mut snake = SnakeGame::new();
     let mut racer = TiltRacerGame::new();
+    let mut breakout = BreakoutGame::new();
 
     let mut previous_game: Option<GameId> = None;
     let mut waiting_for_shake = true;
@@ -88,10 +91,16 @@ fn main() -> ! {
     let mut last_frame = get_millis();
 
     let pick_next_game = |rng: &mut Rng, prev: Option<GameId>| -> GameId {
-        let games = [GameId::Shooter, GameId::Pong, GameId::Snake, GameId::TiltRacer];
-        let mut pick = games[rng.gen_range(0, 4) as usize];
+        let games = [
+            GameId::Shooter,
+            GameId::Pong,
+            GameId::Snake,
+            GameId::TiltRacer,
+            GameId::Breakout,
+        ];
+        let mut pick = games[rng.gen_range(0, 5) as usize];
         while Some(pick) == prev {
-            pick = games[rng.gen_range(0, 4) as usize];
+            pick = games[rng.gen_range(0, 5) as usize];
         }
         pick
     };
@@ -109,6 +118,7 @@ fn main() -> ! {
                 GameId::Pong => "PONG",
                 GameId::Snake => "SNAKE",
                 GameId::TiltRacer => "TILT RACER",
+                GameId::Breakout => "BREAKOUT",
             };
             draw_centered(&mut display, game_title, 25, title_style()).ok();
             draw_centered(&mut display, "SHAKE TO START", 48, body_style()).ok();
@@ -120,7 +130,7 @@ fn main() -> ! {
             prev_az = az;
 
             let threshold = match current_game {
-                GameId::Snake | GameId::TiltRacer => 5.0,
+                GameId::Snake | GameId::TiltRacer | GameId::Breakout => 5.0,
                 _ => 8.0,
             };
 
@@ -132,6 +142,7 @@ fn main() -> ! {
                     GameId::Pong => pong.reset_match(&mut rng),
                     GameId::Snake => snake.reset(&mut rng, now),
                     GameId::TiltRacer => racer.reset(now),
+                    GameId::Breakout => breakout.reset_game(&mut rng),
                 }
 
                 // 3..2..1 Countdown (except Snake starts directly)
@@ -242,6 +253,24 @@ fn main() -> ! {
                 } else {
                     display.clear(BinaryColor::Off).ok();
                     racer.draw(&mut display, now).ok();
+                    display.flush().unwrap();
+                }
+            }
+            GameId::Breakout => {
+                if let Some(status) = breakout.update(&mut rng, ay, now) {
+                    if !status {
+                        display.clear(BinaryColor::Off).ok();
+                        draw_centered(&mut display, "GAME OVER", 25, title_style()).ok();
+                        let mut score_str: String<20> = String::new();
+                        write!(score_str, "SCORE {}", breakout.score).ok();
+                        draw_centered(&mut display, &score_str, 48, body_style()).ok();
+                        display.flush().unwrap();
+                        delay.delay_millis(1500);
+                        round_over = true;
+                    }
+                } else {
+                    display.clear(BinaryColor::Off).ok();
+                    breakout.draw(&mut display).ok();
                     display.flush().unwrap();
                 }
             }

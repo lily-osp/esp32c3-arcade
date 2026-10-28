@@ -16,7 +16,8 @@ This repository contains both:
 | **Pong** | Tilt vertical (MPU X) | Classic single-player Pong vs. adaptive AI with 4 difficulty levels (Easy, Medium, Hard, Extreme) and dynamic ball spin. |
 | **Snake** | Tilt 4-way (MPU X/Y) | Direction-steered snake with border wrapping, food spawning, progressive speed ramp, and self-collision detection. |
 | **Tilt Racer** | Tilt horizontal (MPU Y) | 3-lane vertical highway racer with momentum steering, scrolling road markers, oncoming traffic obstacles, and invincibility frames. |
-| **Random Arcade** | Shake to start | Unified multi-game arcade launcher that seamlessly rotates across all 4 games without repeating the previous game. |
+| **Breakout** | Tilt horizontal (MPU Y) | Brick breaker with 32 multi-hit bricks, dynamic ball angle deflection, dropping power-ups (wide paddle, slow ball, extra life), and level progression. |
+| **Random Arcade** | Shake to start | Unified multi-game arcade launcher that seamlessly rotates across all 5 games without repeating the previous game. |
 
 ---
 
@@ -70,6 +71,7 @@ espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/sh
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/pong
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/snake
 espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/tilt-racer
+espflash flash --port /dev/ttyACM0 target/riscv32imc-unknown-none-elf/release/breakout
 ```
 
 ---
@@ -81,6 +83,7 @@ Each game is also available in its standalone `.ino` sketch directory:
 - `pong/pong.ino`
 - `snake/snake.ino`
 - `tilt-racer/tilt-racer.ino`
+- `breakout/breakout.ino`
 - `random-arcade/random-arcade.ino`
 
 Compile with `arduino-cli`:
